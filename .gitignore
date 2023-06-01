@@ -2,6 +2,7 @@
 node_modules
 /dist
 
+app.yaml
 
 .env
 # local env files

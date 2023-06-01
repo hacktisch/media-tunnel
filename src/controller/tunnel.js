@@ -143,9 +143,11 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
                     }
                 })
                 .catch(e => {
+                    console.error(e)
                     closeProcess();
                 });
         } catch (e) {
+            console.error(e)
             closeProcess();
         }
     }
@@ -172,6 +174,7 @@ module.exports = {
                     queryParams = Object.fromEntries(new URLSearchParams(parts.slice(1).join("?")));
                 }
             } catch (e) {
+                console.error(e)
             }
         }
 
@@ -278,6 +281,7 @@ module.exports = {
 
             return;
         } catch (e) {
+            console.error(e)
         }
 
         // If the file does not exist, start the transformation and save the image to the bucket
