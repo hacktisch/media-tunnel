@@ -3,6 +3,7 @@ node_modules
 /dist
 
 app.yaml
+.gcloudignore
 
 .env
 # local env files
