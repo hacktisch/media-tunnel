@@ -1,6 +1,6 @@
 # Hacktisch Media Tunnel
 
-This is a self-hosted image 'reverse-proxy', providing an alternative to Imgix, BunnyCDN Optimize, and Fastly by offering on-the-fly image optimization and cropping features. This tool allows you to optimize your images in real-time, while saving the requested image URLs to a cloud storage bucket. It's designed for a scalable Node.js backend, compatible with S3 compliant storage solutions like Amazon S3, DigitalOcean Spaces, and Google Cloud Storage.
+This is a self-hosted image 'reverse-proxy' running on NodeJS, providing an alternative to Imgix, BunnyCDN Optimize, and Fastly by offering on-the-fly image optimization and cropping features. This tool allows you to optimize your images in real-time, while saving the requested image URLs to a cloud storage bucket. It's designed for a scalable Node.js backend, compatible with S3 compliant storage solutions like Amazon S3, DigitalOcean Spaces, and Google Cloud Storage.
 
 This tool provides a cheaper alternative for real-time image processing, suitable for developers and businesses who need an affordable, flexible, and customizable image processing solution.
 
