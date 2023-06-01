@@ -82,7 +82,7 @@ To obtain the GCS_PRIVATE_KEY for your Google Cloud Storage (GCS), you need to c
 Be careful when adding this key to your `.env` file, as it often includes newline characters (\n). You'll need to replace all instances of `\n` with `\\n` to preserve the formatting within your `.env` file.
 
 ## Running the Server
-After setting up your environment variables, you can run the server with npm start. The server will start on the port number provided in the PORT environment variable, or default to 3000 if PORT is not defined.
+After setting up your environment variables, you can run the server with npm start. The server will start on the port number provided in the `PORT` environment variable, or default to 4444 if `PORT` is not defined.
 
 ## Contributing
 This project welcomes contributions from the community. Please read our contributing guide to get started.

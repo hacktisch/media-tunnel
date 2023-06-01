@@ -11,4 +11,4 @@ app
    .use(router.routes())
    .use(router.allowedMethods());
 
-app.listen(4444, () => console.log("running on port 4444"));
+app.listen(process.env.PORT||4444, () => console.log("running on port 4444"));
