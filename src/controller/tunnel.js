@@ -1,3 +1,5 @@
+
+
 const axios = require("axios");
 const md5 = require("md5");
 const sharp = require("sharp");
@@ -7,13 +9,13 @@ const PassThrough = require("stream").PassThrough;
 
 // Parsing environment variables and initializing constants
 const {MAX_PARALLEL_TRANSFORMATIONS = 10, ALLOW_CUSTOM_TRANSFORMATIONS=''} = process.env;
-const transformParameters=['w','h','q']
+const transformParameters=['w','h','q','f','p']
 const presets = {};
 
 for (let key in process.env) {
     if (key.startsWith('PRESET_')) {
         const presetKey = key.substring('PRESET_'.length).toLowerCase();
-        presets[presetKey] = parseCustomTransformation(process.env[key]);
+        presets[presetKey] = parseTransformationString(process.env[key]);
     }
 }
 
@@ -60,8 +62,11 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
         automaticClose = setTimeout(closeProcess, 30e3);
         processingHashes[urlHash] = true;
 
-        const {w:width, h:height, q:quality} = transform;
-        const resize = {};
+        const {w:width, h:height, q:quality,f:fit,p:position} = transform;
+        const resize = {
+            fit,
+            position
+        };
         if (width) {
             resize.width = width * scale;
         }
@@ -141,9 +146,12 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
     }
 };
 
-function parseCustomTransformation(transformationString) {
+function parseTransformationString(transformationString) {
     let transformations = transformationString.split(',');
-    let transformation = {};
+    let transformation = {
+        fit:"cover",
+        position:"center"
+    };
     for (let transform of transformations) {
         let [key, value] = transform.split(':');
         if(~transformParameters.indexOf(key)) {
@@ -208,7 +216,7 @@ module.exports = {
             transform = presets[transformation];
         }else if (~['true','1'].indexOf(ALLOW_CUSTOM_TRANSFORMATIONS.toLowerCase())) {
             // Parse the custom transformation if allowed
-            transform = parseCustomTransformation(transformation);
+            transform = parseTransformationString(transformation);
         }
 
         // Checking for DPI scale in URL

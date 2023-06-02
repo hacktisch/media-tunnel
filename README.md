@@ -13,6 +13,7 @@ Github: [hacktisch](https://github.com/hacktisch)
 ## Features
 On-the-fly image optimization and cropping.  
 Support for multiple resolution scales (1x, 2x, 3x).  
+Support for smart cropping position based on center of entropy or attention
 Redirects visitors to the original image on the first request while the optimized version is being generated.  
 Handles a configurable maximum of `MAX_PARALLEL_TRANSFORMATIONS` transformation processes in parallel.
 
@@ -32,11 +33,38 @@ or with a DPI scale factor:\
 
 where:
 * `transformation` can be either:
-  * one of your preset configurations for width, height and quality (e.g., THUMB).
-  * a custom transformation string (e.g., w:200,h:200,q:80); only possible if `ALLOW_CUSTOM_TRANSFORMATIONS` is set to true.
+  * one of your preset configurations for width, height and quality (e.g., `THUMB`).
+  * a custom transformation string (e.g., `w:200,h:200,q:80,p:attention,f:cover`); **(see Transformation String specification below)** only possible if `ALLOW_CUSTOM_TRANSFORMATIONS` is set to true.
 * `dpi_scale_factor` can be one of 1x, 2x, or 3x.
 * `remote_image_url` is the URL of the image you want to optimize.  
   For example: `https://mydomain.com/200x200/2x/https://myimages.com/pic.jpg`
+
+### Transformation string
+
+The transformation string is a comma-separated list of transformation options. The following parameters are supported:
+* `w`: width in pixels
+* `h`: height in pixels
+* `q`: quality in percent
+* `f`**(*)**: fit mode. Defaults to `cover`.
+* `p`**(*)**: position of the crop. Defaults to `centre`.
+
+*\*: Only relevant When both width and height are provided, the possible methods by which the image should **fit** these are:*
+
+- `cover`: (default) Preserving aspect ratio, attempt to ensure the image covers both provided dimensions by cropping/clipping to fit.
+- `contain`: Preserving aspect ratio, contain within both provided dimensions using "letterboxing" where necessary.
+- `fill`: Ignore the aspect ratio of the input and stretch to both provided dimensions.
+- `inside`: Preserving aspect ratio, resize the image to be as large as possible while ensuring its dimensions are less than or equal to both those specified.
+- `outside`: Preserving aspect ratio, resize the image to be as small as possible while ensuring its dimensions are greater than or equal to both those specified.
+
+When using a **fit** of `cover` or `contain`, the default **position** is `centre`. Other options are:
+- position: `top`, `right top`, `right`, `right bottom`, `bottom`, `left bottom`, `left`, `left top`.
+- gravity: `north`, `northeast`, `east`, `southeast`, `south`, `southwest`, `west`, `northwest`, `center` or `centre`.
+- strategy: for `f:cover` only, dynamically crop using either the `entropy` or `attention` strategy.
+
+The experimental strategy-based approach resizes so one dimension is at its target length
+then repeatedly ranks edge regions, discarding the edge with the lowest score based on the selected strategy.
+- `entropy`: focus on the region with the highest [Shannon entropy](https://en.wikipedia.org/wiki/Entropy_%28information_theory%29).
+- `attention`: focus on the region with the highest luminance frequency, colour saturation and presence of skin tones.
 
 ## Setup
 Clone this repository.  
@@ -64,14 +92,15 @@ GCS_PROJECT_ID=<your_gcs_project_id>
 GCS_CLIENT_EMAIL=<your_gcs_client_email>  
 GCS_PRIVATE_KEY=<your_gcs_private_key>  
   
-# Presets  
-PRESET_THUMBNAIL=w:200,h:200,q:80
-PRESET_BANNER=w:800,h:300,q:85
+# Presets
+PRESET_THUMBNAIL=w:200,h:200,q:80,p:entropy
+PRESET_BANNER=w:800,h:300,q:85,p:attention
 PRESET_INLINE=h:60,q:85
+PRESET_WITHIN_CONTAINER=h:100,w:100,f:inside
 # Add as many presets as needed...
 
 # Allow custom transformations
-ALLOW_CUSTOM_TRANSFORMATIONS=true
+ALLOW_CUSTOM_TRANSFORMATIONS=false
 ```  
 ## GCS Private key
 
