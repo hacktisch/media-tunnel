@@ -94,6 +94,7 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
                         animated: true
                     } : {})
                         .resize(resize)
+                        .withMetadata()
                         .toFormat(format);
                     if (format === "jpeg") {
                         transformation.jpeg({
