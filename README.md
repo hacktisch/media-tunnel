@@ -25,13 +25,15 @@ Handles a configurable maximum of `MAX_PARALLEL_TRANSFORMATIONS` transformation 
 ## Usage
 
 Format your image request URL as follows: \
-`https://[domain]/[preset]/[remote_image_url]`
+`https://[domain]/[transformation]/[remote_image_url]`
 
 or with a DPI scale factor:\  
-`https://[domain]/[preset]/[dpi_scale_factor]/[remote_image_url]`
+`https://[domain]/[transformation]/[dpi_scale_factor]/[remote_image_url]`
 
 where:
-* `preset` is one of your preset configurations for width, height and quality (e.g., 200x200).
+* `transformation` can be either:
+  * one of your preset configurations for width, height and quality (e.g., THUMB).
+  * a custom transformation string (e.g., w:200,h:200,q:80); only possible if `ALLOW_CUSTOM_TRANSFORMATIONS` is set to true.
 * `dpi_scale_factor` can be one of 1x, 2x, or 3x.
 * `remote_image_url` is the URL of the image you want to optimize.  
   For example: `https://mydomain.com/200x200/2x/https://myimages.com/pic.jpg`
@@ -63,8 +65,13 @@ GCS_CLIENT_EMAIL=<your_gcs_client_email>
 GCS_PRIVATE_KEY=<your_gcs_private_key>  
   
 # Presets  
-PRESET_200X200=w:200,h:200,q:80  
-# Add as many presets as needed...  
+PRESET_THUMBNAIL=w:200,h:200,q:80
+PRESET_BANNER=w:800,h:300,q:85
+PRESET_INLINE=h:60,q:85
+# Add as many presets as needed...
+
+# Allow custom transformations
+ALLOW_CUSTOM_TRANSFORMATIONS=true
 ```  
 ## GCS Private key
 

@@ -6,24 +6,14 @@ const {Storage} = require("@google-cloud/storage");
 const PassThrough = require("stream").PassThrough;
 
 // Parsing environment variables and initializing constants
-const {MAX_PARALLEL_TRANSFORMATIONS = 10} = process.env;
+const {MAX_PARALLEL_TRANSFORMATIONS = 10, ALLOW_CUSTOM_TRANSFORMATIONS=''} = process.env;
+const transformParameters=['w','h','q']
 const presets = {};
+
 for (let key in process.env) {
     if (key.startsWith('PRESET_')) {
         const presetKey = key.substring('PRESET_'.length).toLowerCase();
-        const values = process.env[key].split(',');
-        const presetValue = {};
-        for (let value of values) {
-            let [subKey, subValue] = value.split(':');
-            if (subKey === 'w') {
-                presetValue['width'] = parseInt(subValue);
-            } else if (subKey === 'h') {
-                presetValue['height'] = parseInt(subValue);
-            } else if (subKey === 'q') {
-                presetValue['quality'] = parseInt(subValue);
-            }
-        }
-        presets[presetKey] = presetValue;
+        presets[presetKey] = parseCustomTransformation(process.env[key]);
     }
 }
 
@@ -70,7 +60,7 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
         automaticClose = setTimeout(closeProcess, 30e3);
         processingHashes[urlHash] = true;
 
-        const {width, height, quality} = transform;
+        const {w:width, h:height, q:quality} = transform;
         const resize = {};
         if (width) {
             resize.width = width * scale;
@@ -143,24 +133,35 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
                     }
                 })
                 .catch(e => {
-                    console.error(e)
                     closeProcess();
                 });
         } catch (e) {
-            console.error(e)
             closeProcess();
         }
     }
 };
 
+function parseCustomTransformation(transformationString) {
+    let transformations = transformationString.split(',');
+    let transformation = {};
+    for (let transform of transformations) {
+        let [key, value] = transform.split(':');
+        if(~transformParameters.indexOf(key)) {
+            value = isNaN(value) ? value : parseInt(value);
+            transformation[key] = value;
+        }
+    }
+    return transformation;
+}
+
 // Exporting a module to serve media files
 module.exports = {
     serveMedia: async ctx => {
         // Parsing parameters
-        let {preset, url} = ctx.params;
+        let {transformation, url} = ctx.params;
         let queryParams = ctx.query;
 
-        preset=preset.toLowerCase();
+        transformation=transformation.toLowerCase();
 
         // Checking if the URL is base64-encoded and decoding it
         const isBase64 = url.match(/^b64:(.*)$/i);
@@ -200,10 +201,14 @@ module.exports = {
             }
         }
 
-        // Checking if the preset is defined in environment variables
-        if (!presets[preset]) {
-            ctx.redirect(url);
-            return;
+        // Checking if the transformation is custom or preset
+        let transform;
+        if (presets[transformation]) {
+            // Use preset transformation
+            transform = presets[transformation];
+        }else if (~['true','1'].indexOf(ALLOW_CUSTOM_TRANSFORMATIONS.toLowerCase())) {
+            // Parse the custom transformation if allowed
+            transform = parseCustomTransformation(transformation);
         }
 
         // Checking for DPI scale in URL
@@ -216,10 +221,19 @@ module.exports = {
 
         // Constructing the requested URL
         const queryParamString = new URLSearchParams(queryParams).toString();
-        const requestedUrl = `${url}?${queryParamString}`;
+        const requestedUrl = `${url}${queryParamString?'?':''}${queryParamString}`;
+
+        // If no valid transformation was found, redirect to the original URL
+        if (!transform) {
+            ctx.redirect(requestedUrl);
+            return;
+        }
 
         // Hashing the URL to create a unique identifier
-        const urlHash = md5(`${preset}/${scale}/${requestedUrl}`);
+        const urlHash = md5(`${Object.keys(transform).sort().reduce((arr, key) => {
+            arr.push(`${key}:${transform[key]}`);
+            return arr;
+        }, []).join(',')}/${scale}/${requestedUrl}`);
         let format = queryParams.ext;
         if (!format) {
             const parts = requestedUrl
@@ -281,12 +295,11 @@ module.exports = {
 
             return;
         } catch (e) {
-            console.error(e)
         }
 
         // If the file does not exist, start the transformation and save the image to the bucket
         saveCropIfNotAlreadyDoingIt(urlHash, {
-            source: requestedUrl, target: fileName, format, transform: presets[preset], scale
+            source: requestedUrl, target: fileName, format, transform, scale
         });
 
         // Redirect to the original URL if the transformed image is not yet available
