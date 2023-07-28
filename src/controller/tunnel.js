@@ -1,15 +1,13 @@
-
-
 const axios = require("axios");
 const md5 = require("md5");
 const sharp = require("sharp");
 const AWS = require("aws-sdk");
-const {Storage} = require("@google-cloud/storage");
+const { Storage } = require("@google-cloud/storage");
 const PassThrough = require("stream").PassThrough;
 
 // Parsing environment variables and initializing constants
-const {MAX_PARALLEL_TRANSFORMATIONS = 10, ALLOW_CUSTOM_TRANSFORMATIONS=''} = process.env;
-const transformParameters=['w','h','q','f','p']
+const { MAX_PARALLEL_TRANSFORMATIONS = 10, ALLOW_CUSTOM_TRANSFORMATIONS = '' } = process.env;
+const transformParameters = ['w', 'h', 'q', 'f', 'p', 'o']
 const presets = {};
 
 for (let key in process.env) {
@@ -42,7 +40,7 @@ const getMime = format => `image/${format}`;
 const processingHashes = {};
 
 // Handling image transformations
-const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform, scale}) => {
+const saveCropIfNotAlreadyDoingIt = (urlHash, { source, target, format, transform, scale }) => {
 
 
     const activeTransforms = Object.keys(processingHashes).length;
@@ -62,7 +60,7 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
         automaticClose = setTimeout(closeProcess, 30e3);
         processingHashes[urlHash] = true;
 
-        const {w:width, h:height, q:quality,f:fit,p:position} = transform;
+        const { w: width, h: height, q: quality, f: fit, p: position } = transform;
         const resize = {
             fit,
             position
@@ -88,7 +86,6 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
                             format = "png";
                         }
                     }
-
 
                     const transformation = sharp(response.data, ~["gif", "webp"].indexOf(format) ? {
                         animated: true
@@ -150,12 +147,12 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, {source, target, format, transform
 function parseTransformationString(transformationString) {
     let transformations = transformationString.split(',');
     let transformation = {
-        fit:"cover",
-        position:"center"
+        fit: "cover",
+        position: "center"
     };
     for (let transform of transformations) {
         let [key, value] = transform.split(':');
-        if(~transformParameters.indexOf(key)) {
+        if (~transformParameters.indexOf(key)) {
             value = isNaN(value) ? value : parseInt(value);
             transformation[key] = value;
         }
@@ -167,10 +164,11 @@ function parseTransformationString(transformationString) {
 module.exports = {
     serveMedia: async ctx => {
         // Parsing parameters
-        let {transformation, url} = ctx.params;
+        let { transformation, url } = ctx.params;
         let queryParams = ctx.query;
+        const { accept = "" } = ctx.request?.header || {};
 
-        transformation=transformation.toLowerCase();
+        transformation = transformation.toLowerCase();
 
         // Checking if the URL is base64-encoded and decoding it
         const isBase64 = url.match(/^b64:(.*)$/i);
@@ -215,7 +213,7 @@ module.exports = {
         if (presets[transformation]) {
             // Use preset transformation
             transform = presets[transformation];
-        }else if (~['true','1'].indexOf(ALLOW_CUSTOM_TRANSFORMATIONS.toLowerCase())) {
+        } else if (~['true', '1'].indexOf(ALLOW_CUSTOM_TRANSFORMATIONS.toLowerCase())) {
             // Parse the custom transformation if allowed
             transform = parseTransformationString(transformation);
         }
@@ -228,9 +226,24 @@ module.exports = {
             url = url.slice(dpiScaleMatch[0].length);
         }
 
+        let format;
+
+        const castOutputMatch = url.match(/^(.*)\:o\.(.*)$/);
+
+        let cast;
+        if (castOutputMatch) {
+            url = castOutputMatch[1];
+            const newFormat = castOutputMatch[2];
+            // Detect browser support
+            if (accept.includes(getMime(newFormat))) {
+                format = newFormat;
+                cast = newFormat;
+            }
+        }
+
         // Constructing the requested URL
         const queryParamString = new URLSearchParams(queryParams).toString();
-        const requestedUrl = `${url}${queryParamString?'?':''}${queryParamString}`;
+        const requestedUrl = `${url}${queryParamString ? '?' : ''}${queryParamString}`;
 
         // If no valid transformation was found, redirect to the original URL
         if (!transform) {
@@ -242,8 +255,10 @@ module.exports = {
         const urlHash = md5(`${Object.keys(transform).sort().reduce((arr, key) => {
             arr.push(`${key}:${transform[key]}`);
             return arr;
-        }, []).join(',')}/${scale}/${requestedUrl}`);
-        let format = queryParams.ext;
+        }, []).join(',')}/${scale}/${cast ? `${cast}/` : ''}${requestedUrl}`);
+        if (!format) {
+            format = queryParams.ext;
+        }
         if (!format) {
             const parts = requestedUrl
                 .split("/")
@@ -262,10 +277,14 @@ module.exports = {
         }
 
         // Checking if the format is one of the allowed formats
-        if (!~["png", "jpg", "jpeg", "gif", "webp", "unknown"].indexOf(format)) {
+        if (!~["png", "jpg", "jpeg", "gif", "webp", "avif", "unknown"].indexOf(format)) {
             ctx.redirect(requestedUrl);
             return;
         }
+
+
+
+
         if (format === "jpg") {
             format = "jpeg";
         }

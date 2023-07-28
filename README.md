@@ -28,8 +28,12 @@ Handles a configurable maximum of `MAX_PARALLEL_TRANSFORMATIONS` transformation 
 Format your image request URL as follows: \
 `https://[domain]/[transformation]/[remote_image_url]`
 
-or with a DPI scale factor:\  
+or with a DPI scale factor:\
 `https://[domain]/[transformation]/[dpi_scale_factor]/[remote_image_url]`
+
+you can also cast the image into another format:\
+`https://[domain]/[transformation]/[remote_image_url]:o.[format]`\
+(for example `webp` or `avif`. the original format is served as a fallback when the requesting browser does not support the new format)
 
 where:
 * `transformation` can be either:
