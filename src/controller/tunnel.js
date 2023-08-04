@@ -39,12 +39,8 @@ const getMime = format => `image/${format}`;
 // Active image transformation processes
 const processingHashes = {};
 
-// Handling image transformations
-const saveCropIfNotAlreadyDoingIt = (urlHash, { source, target, format, transform, scale }) => {
-
-
-    const activeTransforms = Object.keys(processingHashes).length;
-    if (activeTransforms > MAX_PARALLEL_TRANSFORMATIONS) {
+const saveCropIfNotAlreadyDoingIt = async (urlHash, { source, target, format, transform, scale }) => {
+    if (Object.keys(processingHashes).length > MAX_PARALLEL_TRANSFORMATIONS) {
         return;
     }
 
@@ -74,70 +70,58 @@ const saveCropIfNotAlreadyDoingIt = (urlHash, { source, target, format, transfor
 
         // Image transformation pipeline
         try {
-            axios({
+            const response = await axios({
                 method: "get", url: source, responseType: "arraybuffer"
             })
-                .then(async response => {
-                    if (format === "unknown") {
-                        const match = (response.headers["content-type"] || "").match(/^image\/(.*)$/i);
-                        if (match) {
-                            format = match[1];
-                        } else {
-                            format = "png";
-                        }
-                    }
 
-                    const transformation = sharp(response.data, ~["gif", "webp"].indexOf(format) ? {
-                        animated: true
-                    } : {})
-                        .resize(resize)
-                        .withMetadata()
-                        .toFormat(format);
-                    if (format === "jpeg") {
-                        transformation.jpeg({
-                            quality
-                        });
-                    }
+            if (format === "unknown") {
+                const match = (response.headers["content-type"] || "").match(/^image\/(.*)$/i);
+                if (match) {
+                    format = match[1];
+                } else {
+                    format = "png";
+                }
+            }
 
-                    const Body = await transformation.toBuffer();
-
-                    // Checking the cloud provider and then performing appropriate bucket operations
-                    if (process.env.CLOUD_PROVIDER === 'AWS') {
-                        bucketProvider.putObject({
-                            ACL: "public-read",
-                            ContentType: getMime(format),
-                            Body,
-                            Bucket: process.env.BUCKET_NAME,
-                            Key: target
-                        }, function () {
-                            closeProcess();
-                        });
-                    } else if (process.env.CLOUD_PROVIDER === 'GCS') {
-
-                        const bucket = bucketProvider.bucket(process.env.BUCKET_NAME);
-                        const file = bucket.file(target);
-
-                        const writeStream = file.createWriteStream({
-                            metadata: {
-                                contentType: getMime(format)
-                            }, resumable: false
-                        });
-
-                        writeStream.on('error', (err) => {
-                            console.error('Error saving file to GCS:', err);
-                            closeProcess();
-                        });
-
-                        writeStream.on('finish', () => {
-                            closeProcess();
-                        });
-
-                        writeStream.end(Body);
-                    }
-                })
-                .catch(e => {
-                    closeProcess();
+            const transformation = sharp(response.data, ~["gif", "webp"].indexOf(format) ? {
+                animated: true
+            } : {})
+                .resize(resize)
+                .withMetadata()
+                .toFormat(format);
+            if (format === "jpeg") {
+                transformation.jpeg({
+                    quality
                 });
+            }
+
+            const Body = await transformation.toBuffer();
+
+            // Checking the cloud provider and then performing appropriate bucket operations
+            if (process.env.CLOUD_PROVIDER === 'AWS') {
+                bucketProvider.putObject({
+                    ACL: "public-read",
+                    ContentType: getMime(format),
+                    Body,
+                    Bucket: process.env.BUCKET_NAME,
+                    Key: target
+                }, closeProcess);
+            } else if (process.env.CLOUD_PROVIDER === 'GCS') {
+                const bucket = bucketProvider.bucket(process.env.BUCKET_NAME);
+                const file = bucket.file(target);
+
+                const writeStream = file.createWriteStream({
+                    metadata: {
+                        contentType: getMime(format)
+                    }, resumable: false
+                });
+
+                writeStream.on('error', closeProcess);
+
+                writeStream.on('finish', closeProcess);
+
+                writeStream.end(Body);
+            }
         } catch (e) {
             closeProcess();
         }
@@ -319,19 +303,21 @@ module.exports = {
             ctx.res.setHeader("Cache-Control", "public, max-age=31536000");
             ctx.body = stream
                 .on("error", err => ctx.onerror(err))
-                .pipe(PassThrough());
+                .pipe(new PassThrough());
 
-            return;
-        } catch (e) {
+        } catch (error) {
+            if (error.statusCode === 404 || error.code === 404) {
+
+                // If the file does not exist, start the transformation and save the image to the bucket
+                saveCropIfNotAlreadyDoingIt(urlHash, {
+                    source: requestedUrl, target: fileName, format, transform, scale
+                });
+                // Redirect to the original URL if the transformed image is not yet available
+                return ctx.redirect(requestedUrl);
+            } else {
+                ctx.status = 500;
+                ctx.body = 'Server error';
+            }
         }
-
-        // If the file does not exist, start the transformation and save the image to the bucket
-        saveCropIfNotAlreadyDoingIt(urlHash, {
-            source: requestedUrl, target: fileName, format, transform, scale
-        });
-
-        // Redirect to the original URL if the transformed image is not yet available
-        ctx.redirect(requestedUrl);
-
     }
 };
