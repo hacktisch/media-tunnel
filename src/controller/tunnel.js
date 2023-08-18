@@ -39,7 +39,7 @@ const getMime = format => `image/${format}`;
 // Active image transformation processes
 const processingHashes = {};
 
-const saveCropIfNotAlreadyDoingIt = async (urlHash, { source, target, format, transform, scale }) => {
+const saveCropIfNotAlreadyDoingIt = async (urlHash, { source, target, format, sourceFormat, transform, scale }) => {
     if (Object.keys(processingHashes).length > MAX_PARALLEL_TRANSFORMATIONS) {
         return;
     }
@@ -83,9 +83,14 @@ const saveCropIfNotAlreadyDoingIt = async (urlHash, { source, target, format, tr
                 }
             }
 
-            const transformation = sharp(response.data, ~["gif", "webp"].indexOf(format) ? {
-                animated: true
-            } : {})
+            const transformation = sharp(response.data, {
+                ...(~["gif", "webp"].indexOf(sourceFormat) ? {
+                    animated: true
+                } : {}),
+                ...(~["jpeg"].indexOf(sourceFormat) ? {
+                    failOn: 'truncated'
+                } : {}),
+            })
                 .resize(resize)
                 .withMetadata()
                 .toFormat(format);
@@ -240,34 +245,36 @@ module.exports = {
             arr.push(`${key}:${transform[key]}`);
             return arr;
         }, []).join(',')}/${scale}/${cast ? `${cast}/` : ''}${requestedUrl}`);
+
         if (!format) {
             format = queryParams.ext;
         }
+        let sourceFormat;
+        const parts = requestedUrl
+            .split("/")
+            .pop()
+            .split(/[#?]/)[0]
+            .split(".");
+        if (parts.length >= 2) {
+            const last = parts.pop().trim();
+            if (last.length <= 4) {
+                sourceFormat = last.toLowerCase();
+            }
+        }
+        if (!sourceFormat) {
+            sourceFormat = "unknown";
+        }
         if (!format) {
-            const parts = requestedUrl
-                .split("/")
-                .pop()
-                .split(/[#?]/)[0]
-                .split(".");
-            if (parts.length >= 2) {
-                const last = parts.pop().trim();
-                if (last.length <= 4) {
-                    format = last.toLowerCase();
-                }
-            }
-            if (!format) {
-                format = "unknown";
-            }
+            format = sourceFormat;
         }
 
-        // Checking if the format is one of the allowed formats
-        if (!~["png", "jpg", "jpeg", "gif", "webp", "avif", "unknown"].indexOf(format)) {
-            ctx.redirect(requestedUrl);
-            return;
+        // Checking if the formats are one of the allowed formats
+        for (const check of [format, sourceFormat]) {
+            if (!~["png", "jpg", "jpeg", "gif", "webp", "avif", "unknown"].indexOf(check)) {
+                ctx.redirect(requestedUrl);
+                return;
+            }
         }
-
-
-
 
         if (format === "jpg") {
             format = "jpeg";
@@ -310,7 +317,7 @@ module.exports = {
 
                 // If the file does not exist, start the transformation and save the image to the bucket
                 saveCropIfNotAlreadyDoingIt(urlHash, {
-                    source: requestedUrl, target: fileName, format, transform, scale
+                    source: requestedUrl, target: fileName, format, sourceFormat, transform, scale
                 });
                 // Redirect to the original URL if the transformed image is not yet available
                 return ctx.redirect(requestedUrl);
